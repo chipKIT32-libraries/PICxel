@@ -600,16 +600,16 @@ void PICxel::GRBrefreshLEDs(void)
       if (*colorArrayPtr & bitSelect)
       {
         *portSet = pinMask;
-        GRB_delay_T1H();
+        GRB_DELAY_T1H
         *portClr = pinMask;
-        GRB_delay_T1L();
+        GRB_DELAY_T1L
       }
       else
       {
         *portSet = pinMask;
-        GRB_delay_T0H();
+        GRB_DELAY_T0H
         *portClr = pinMask;
-        GRB_delay_T0L();
+        GRB_DELAY_T0L
       }
       bitSelect = (bitSelect >> 1);
     }
@@ -646,702 +646,509 @@ void PICxel::HSVrefreshLEDs(void)
   //do not allow bitstream to be interrupted
   noInterrupts();
 
-asm volatile( 
-"lw $s0, %4     \n\t" //load address of color_ptr
-
-//compute first color
-"j computeFirstColor  \n\t"
-"colorComputed:     \n\t"
-
-//loop through all LEDs
-"forLoop:     \n\t"
-  "move $t0, $t1    \n\t" //move the next_color to current_color
-
-  "move $t1, $zero  \n\t" //clear next_color    
-
-  "addi $s0, $s0, 4 \n\t"
-  
-  "lw $t2, ($s0)    \n\t"
-  
-  "move $t6, $zero  \n\t" //clear t6 for a byte iterator
-  
-"color_loop:      \n\t"
-////////////////////
-//Bit 0
-////////////////////  
-  "lw $t7, %3     \n\t" //set pin
-  "sw %0, ($t7)   \n\t"
-  
-  "andi $t3, $t2, 0xFFFF  \n\t" //get hue
-  
-  "srl $t4, $t2, 16     \n\t" //get saturation
-  "andi $t4, $t4, 0xFF  \n\t"
-  "addi $t4, $t4, 1   \n\t"
-  
-  "srl $t5, $t2, 24   \n\t" //get value
-  "andi $t5, $t5, 0xFF  \n\t"
-  "addi $t5, $t5, 1   \n\t"
-  
-  "multu $t5, $t4     \n\t" //chroma = sat * val
-  "mflo $t4       \n\t"
-  "srl $t4, $t4, 8    \n\t"
-  
-  "subu $t5, $t5, $t4   \n\t" //m_num = value - chroma
-
-  //delay for the end of the first section
-  HSV_bit_0_delay_0 //preprocessor macro
-  
-  "andi $t7, $t0, 0b10000000  \n\t" //bitmask out the value 
-  "bne $t7, $zero, bit0IsHigh \n\t" //branch if bit is high, branch over set low
-
-  "lw $t7, %2     \n\t" //clear pin
-  "sw %0, ($t7)   \n\t"
-  
-"bit0IsHigh:      \n\t"
-
-  //delay for the end of the second section
-  HSV_bit_0_delay_1 //preprocessor macro
-
-  "lw $t7, %2     \n\t"   //clear pin
-  "sw %0, ($t7)   \n\t"
-
-  //if(hue < 256)
-  "li $t7, 256        \n\t" //load hue
-  "sub $t7, $t3, $t7      \n\t" //store hue - 256
-  "bgez $t7, didNotMakeHue0 \n\t" //if hue>256 branch
-  
-  //hue < 256
-  "multu $t3, $t4       \n\t" //set green
-  "mflo $t1         \n\t"
-  "srl $t1, $t1, 8      \n\t"
-  "add $t1, $t1, $t5      \n\t"
-  
-  "addu $t7, $t4, $t5     \n\t" //set red
-  "addi $t7, $t7, -1      \n\t"
-  "sll $t7, $t7, 8      \n\t"
-  "andi $t7, $t7, 0xFF00    \n\t"
-  "or $t1, $t1, $t7     \n\t"
-
-  "andi $t7, $t5, 0xFF    \n\t" 
-  "sll $t7, $t5, 16     \n\t" //set blue
-  "or $t1, $t7, $t1     \n\t"
-  
-  //delay for the end of the third section when the hue has been made
-  HSV_bit_0_delay_2 //preprocessor macro
-
-  "j madeHue0       \n\t"
-
-"didNotMakeHue0:        \n\t" 
-
-  //delay for the end of the third section when the hue has not been made
-  HSV_bit_0_delay_3 //preprocessor macro
-
-"madeHue0:        \n\t"
-  
-////////////////////
-//Bit 1
-////////////////////
-  "lw $t7, %3     \n\t" //set pin
-  "sw %0, ($t7)   \n\t"
-
-  //delay for the end of the first section  
-  HSV_universal_delay_1 //preprocessor macro
-  
-  "andi $t7, $t0, 0b01000000  \n\t" //bitmask out the value 
-  "bne $t7, $zero, bit1IsHigh \n\t" //branch if bit is high, branch over set low
-  
-  "lw $t7, %2     \n\t" //clear pin
-  "sw %0, ($t7)   \n\t"
- 
-"bit1IsHigh:      \n\t"
-
-  //delay for the end of the second section 
-  HSV_universal_delay_2 //preprocessor macro
-
-  "lw $t7, %2       \n\t" //clear pin
-  "sw %0, ($t7)     \n\t"
-  
-  //if(next_color == 0) then continue
-  "bne $t1, $zero, huePrevMade1       \n\t"
-  
-  //if(hue < 512)
-  "li $t7, 512        \n\t"
-  "sub $t7, $t3, $t7      \n\t"
-  "bgez $t7, didNotMakeHue1 \n\t"
-  
-  //hue < 512
-  "addu $t7, $t4, $t5     \n\t" //set green
-  "addi $t7, $t7, -1      \n\t"
-  "andi $t1, $t7, 0xFF    \n\t"
-  
-  "li $t7, 511        \n\t" //set red
-  "subu $t7, $t7, $t3     \n\t"
-  "multu $t4, $t7       \n\t"
-  "mflo $t7         \n\t"
-  "srl $t7, $t7, 8      \n\t"
-  "addu $t7, $t7, $t5     \n\t"
-  "and $t7, $t7, 0xFF     \n\t"
-  "sll $t7, $t7, 8      \n\t"
-  "or $t1, $t7, $t1     \n\t"
-  
-  "sll $t7, $t5, 16     \n\t" //set blue
-  "or $t1, $t7, $t1     \n\t" 
-
-  //delay for the end of the third section when hue is made   
-  HSV_bit_1_delay_0
-  
-  "j madeHue1     \n\t" 
-
-"huePrevMade1:      \n\t"
-
-  //delay for the end of the third section hue was made earlier 
-  HSV_bit_1_delay_1
-
-  "j madeHue1     \n\t"
-  
-"didNotMakeHue1:  \n\t"
-
-  //delay for the end of the third section hue has not been made  
-  HSV_bit_1_delay_2
-
-"madeHue1:    \n\t"
-
-
-////////////////////
-//Bit 2
-////////////////////
-  "lw $t7, %3     \n\t" //set pin
-  "sw %0, ($t7)   \n\t"
-
-  //delay for the end of the first section  
-  HSV_universal_delay_1 //preprocessor macro
-  
-  "andi $t7, $t0, 0b00100000  \n\t" //bitmask out the value 
-  "bne $t7, $zero, bit2IsHigh \n\t" //branch if bit is high, branch over set low
-
-  "lw $t7, %2       \n\t" //clear pin
-  "sw %0, ($t7)     \n\t"
- 
-"bit2IsHigh:      \n\t"
-
-  //delay for the end of the second section 
-  HSV_universal_delay_2 //preprocessor macro
-  "nop\n"
-
-  "lw $t7, %2       \n\t" //clear pin
-  "sw %0, ($t7)     \n\t"
-
-  //if(next_color == 0) then continue
-  "bne $t1, $zero, huePrevMade2       \n\t"
-
-  //if(hue < 768)
-  "li $t7, 768        \n\t"
-  "sub $t7, $t3, $t7      \n\t"
-  "bgez $t7, didNotMakeHue2 \n\t"
-  
-  //hue < 768
-  "addu $t7, $t4, $t5     \n\t" //set green
-  "addi $t7, $t7, -1      \n\t"
-  "andi $t1, $t7, 0xFF    \n\t"
-  
-  "sll $t7, $t5, 8      \n\t" //set red
-  "or $t1, $t7, $t1     \n\t"
-  
-  "li $t7, 512        \n\t" //set blue
-  "subu $t7, $t3, $t7     \n\t"
-  "multu $t4, $t7       \n\t"
-  "mflo $t7         \n\t"
-  "srl $t7, $t7, 8      \n\t"
-  "addu $t7, $t7, $t5     \n\t"
-  "andi $t7, $t7, 0xFF    \n\t"
-  "sll $t7, $t7, 16     \n\t"
-  "or $t1, $t7, $t1     \n\t"
-  
-  //delay for the end of the third section when hue is made   
-  HSV_bit_2_delay_0 //preprocessor macro
-  
-  "j madeHue2     \n\t" 
-
-"huePrevMade2:      \n\t"
-
-  //delay for the end of the third section hue was made earlier 
-  HSV_bit_2_delay_1 //preprocessor macro
-
-  "j madeHue2     \n\t"
-  
-"didNotMakeHue2:  \n\t"
-  //delay for the end of the third section when hue is not made 
-  HSV_bit_2_delay_2 //preprocessor macro
-  
-"madeHue2:          \n\t"  
-  
-////////////////////
-//Bit 3
-////////////////////
-  "lw $t7, %3     \n\t" //set pin
-  "sw %0, ($t7)   \n\t"
-
-//delay for the end of the first section  
-HSV_universal_delay_1 //preprocessor macro
-
-  "andi $t7, $t0, 0b00010000  \n\t" //
-  "bne $t7, $zero, bit3IsHigh \n\t" //branch if bit is high, branch over set low
-
-  "lw $t7, %2       \n\t" //clear pin
-  "sw %0, ($t7)     \n\t"
-  
-"bit3IsHigh:      \n\t"
-
-  //delay for the end of the second section 
-  HSV_universal_delay_2 //preprocessor macro
-
-  "lw $t7, %2       \n\t" //clear pin
-  "sw %0, ($t7)     \n\t"
-  
-  //if(next_color == 0) then continue
-  "bne $t1, $zero, huePrevMade3       \n\t"
-
-  //if(hue < 1024)
-  "li $t7, 1024       \n\t"
-  "sub $t7, $t3, $t7      \n\t"
-  "bgez $t7, didNotMakeHue3 \n\t"
-  
-  //hue < 1024
-  "li $t7, 1023       \n\t" //set green
-  "subu $t7, $t7, $t3     \n\t"
-  "multu $t4, $t7       \n\t"
-  "mflo $t7         \n\t"
-  "srl $t7, $t7, 8      \n\t"
-  "addu $t1, $t7, $t5     \n\t"
-  //"and $t7, $t7, 0xFF     \n\t"
-
-  "sll $t7, $t5, 8      \n\t" //set red
-  "or $t1, $t7, $t1     \n\t"
-  
-  "addu $t7, $t4, $t5     \n\t" //set blue
-  "addi $t7, $t7, -1      \n\t"
-  "andi $t7, $t7, 0xFF    \n\t"
-  "sll $t7, $t7, 16     \n\t"
-  "or $t1, $t7, $t1     \n\t"
-  
-  //delay for the end of the third section when hue is made   
-  HSV_bit_3_delay_0
-  
-  "j madeHue3     \n\t" 
-
-"huePrevMade3:      \n\t" 
-
-  //delay for the end of the third section hue was made earlier 
-  HSV_bit_3_delay_1
-  
-  "j madeHue3     \n\t"
-  
-"didNotMakeHue3:  \n\t"
-  
-//delay for the end of the third section when hue is not made   
-  HSV_bit_3_delay_2
-  
-"madeHue3:    \n\t"     
-
-////////////////////
-//Bit 4
-////////////////////
-  "lw $t7, %3     \n\t" //set pin
-  "sw %0, ($t7)   \n\t"
-
-  //delay for the end of the first section  
-  HSV_universal_delay_1 //preprocessor macro
-
-  "andi $t7, $t0, 0b00001000  \n\t" //
-  "bne $t7, $zero, bit4IsHigh \n\t" //branch if bit is high, branch over set low
-
-  "lw $t7, %2       \n\t" //clear pin
-  "sw %0, ($t7)     \n\t"
-  
-"bit4IsHigh:      \n\t"
-
-  //delay for the end of the second section 
-  HSV_universal_delay_2 //preprocessor macro
-
-  "lw $t7, %2       \n\t" //clear pin
-  "sw %0, ($t7)     \n\t"
-  
-  //if next_color is not zero then branch
-  "bne $t1, $zero, huePrevMade4       \n\t"
-
-  //if(hue < 1280)
-  "li $t7, 1280       \n\t"
-  "sub $t7, $t3, $t7      \n\t"
-  "bgez $t7, didNotMakeHue4 \n\t"
-  
-  //hue < 1280
-  "andi $t1, $t5, 0xFF    \n\t" //set green
-
-  "li $t7, 1024       \n\t" //set red
-  "subu $t7, $t3, $t7     \n\t"
-  "multu $t7, $t4       \n\t"
-  "mflo $t7         \n\t"
-  "srl $t7, $t7, 8      \n\t"
-  "addu $t7, $t7, $t5     \n\t"
-  "sll $t7, $t7, 8      \n\t"
-  "or $t1, $t1, $t7     \n\t"
-  
-  "addu $t7, $t4, $t5     \n\t" //set blue
-  "addi $t7, $t7, -1      \n\t"
-  "sll $t7, $t7, 16     \n\t"
-  "or $t1, $t7, $t1     \n\t"
-  
-  //delay for the end of the third section when hue is made   
-  HSV_bit_4_delay_0 //preprocessor macro
-  
-  "j madeHue4     \n\t" 
-
-"huePrevMade4:      \n\t" 
-  
-  //delay for the end of the third section hue was made earlier 
-  HSV_bit_4_delay_1 //preprocessor macro
-  
-  "j madeHue4     \n\t"
-  
-"didNotMakeHue4:  \n\t"
-  
-  //delay for the end of the third section when hue is not made   
-  HSV_bit_4_delay_2
-  
-"madeHue4:    \n\t" 
- 
-////////////////////
-//Bit 5
-////////////////////
-  "lw $t7, %3     \n\t" //set pin
-  "sw %0, ($t7)   \n\t"
-
-  //delay for the end of the first section  
-  HSV_universal_delay_1 //preprocessor macro
-
-  "andi $t7, $t0, 0b0000100 \n\t" //
-  "bne $t7, $zero, bit5IsHigh \n\t" //branch if bit is high, branch over set low
-
-  "lw $t7, %2       \n\t" //clear pin
-  "sw %0, ($t7)     \n\t"
-  
-"bit5IsHigh:      \n\t"
-
-  //delay for the end of the second section 
-  HSV_universal_delay_2 //preprocessor macro
-  "nop \n"
-
-  "lw $t7, %2       \n\t" //clear pin
-  "sw %0, ($t7)     \n\t"
-  
-  //if next_color is not zero then branch
-  "bne $t1, $zero, huePrevMade5       \n\t"
-
-  //if(hue < 1536)
-  "li $t7, 1536       \n\t"
-  "sub $t7, $t3, $t7      \n\t"
-  "bgez $t7, didNotMakeHue5 \n\t"
-  
-  //hue < 1536
-  "andi $t1, $t5, 0xFF    \n\t" //set green
-
-  "addu $t7, $t4, $t5     \n\t" //set red
-  "addi $t7, $t7, -1      \n\t"
-  "sll $t7, $t7, 8      \n\t"
-  "or $t1, $t1, $t7     \n\t"
-  
-  "li $t7, 1535       \n\t" //set blue
-  "subu $t7, $t7, $t3     \n\t"
-  "multu $t7, $t4       \n\t"
-  "mflo $t7         \n\t"
-  "andi $t7, $t7, 0xFF00    \n\t"
-  "sll $t7, $t7, 8      \n\t"
-  "or $t1, $t1, $t7     \n\t"
-  
-  //delay for the end of the third section when hue is made   
-  HSV_bit_5_delay_0 //preprocessor macro
-  
-  "j madeHue5     \n\t" 
-
-"huePrevMade5:      \n\t"
-
-  //delay for the end of the third section hue was made earlier 
-  HSV_bit_5_delay_1 //preprocessor macro
-  
-  "j madeHue5     \n\t"
-  
-"didNotMakeHue5:  \n\t"
-  
-  //delay for the end of the third section when hue is not made   
-  HSV_bit_5_delay_2 //preprocessor macro
-  
-"madeHue5:    \n\t"
-
-////////////////////
-//Bit 6
-////////////////////
-  "lw $t7, %3     \n\t" //set pin
-  "sw %0, ($t7)   \n\t"
-
-  //delay for the end of the first section  
-  HSV_universal_delay_1 //preprocessor macro
-
-  "andi $t7, $t0, 0b00000010  \n\t" //
-  "bne $t7, $zero, bit6IsHigh \n\t" //branch if bit is high, branch over set low
-
-  "lw $t7, %2       \n\t" //clear pin
-  "sw %0, ($t7)     \n\t"
-  
-"bit6IsHigh:      \n\t"
-
-  //delay for the end of the second section 
-  HSV_universal_delay_2 //preprocessor macro
-
-  "lw $t7, %2       \n\t" //clear pin
-  "sw %0, ($t7)     \n\t"
-
-  "srl $t7, $t2, 24     \n\t" //get value
-  "andi $t7, $t7, 0xFF    \n\t"
-
-  "bne $t7, $zero, zero_val_check_1 \n\t"
-  "move $t1, $zero      \n\t"
-
-"zero_val_check_1:      \n\t"
-
-  //delay for the end of the second section 
-  HSV_universal_delay_3 //preprocessor macro
-  
-////////////////////
-//Bit 7
-////////////////////
-  "lw $t7, %3     \n\t" //set pin
-  "sw %0, ($t7)   \n\t"
-  
-  //delay for the end of the first section  
-  HSV_universal_delay_1 //preprocessor macro
-
-  "andi $t7, $t0, 0b00000001  \n\t" //
-  "bne $t7, $zero, bit7IsHigh \n\t" //branch if bit is high, branch over set low
-
-  "lw $t7, %2       \n\t" //clear pin
-  "sw %0, ($t7)     \n\t"
-  
-"bit7IsHigh:      \n\t"
-
-  //delay for the end of the second section 
-  HSV_universal_delay_2 //preprocessor macro
-
-  "lw $t7, %2       \n\t" //clear pin
-  "sw %0, ($t7)     \n\t"
-  
-  //delay for the end of the second section 
-  HSV_universal_delay_3 //preprocessor macro
-
-  //shift the data to the next color byte 
-  "srl $t0, $t0, 8    \n\t"
-    
-  "addi $t6, $t6, 1     \n\t" //iterate t6      
-  "li $t7, 3          \n\t" //load 
-  "bne $t7, $t6, color_loop \n\t"
-  
-/////////////////////////////// 
-//end of data stream  
-  "addi %1, %1, -1    \n\t" //decrement the led 
-  
-  "bgt %1, $zero, forLoop \n\t"
-//end of forLoop:
-  "j HSVassemblyEnd       \n\t"
-
-"computeFirstColor:   \n\t"
-//color computation
-
-  "lw $t2, ($s0)    \n\t"   //dereference color_ptr address
-  "move $t1, $zero    \n\t" //clear next color
-    
-  "andi $t3, $t2, 0xFFFF  \n\t" //get hue
-  
-  "srl $t4, $t2, 16     \n\t" //get saturation
-  "andi $t4, $t4, 0xFF  \n\t"
-  "addi $t4, $t4, 1   \n\t"
-  
-  "srl $t5, $t2, 24   \n\t" //get value
-  "andi $t5, $t5, 0xFF  \n\t"
-  "addi $t5, $t5, 1   \n\t"
-  
-  "multu $t5, $t4     \n\t" //chroma = sat * val
-  "mflo $t4       \n\t"
-  "srl $t4, $t4, 8    \n\t"
-  
-  "subu $t5, $t5, $t4   \n\t" //m_num = value - chroma
-
-  //if(hue < 256)
-  "li $t7, 256        \n\t" //load hue
-  "sub $t7, $t3, $t7      \n\t" //store hue - 256
-  "bgez $t7, comp_hue1    \n\t" //if hue>256 branch
-  
-  //hue < 256
-  "multu $t3, $t4       \n\t" //set green
-  "mflo $t7         \n\t"
-  "srl $t7, $t7, 8      \n\t"
-  "add $t1, $t7, $t5      \n\t"
-  
-  "addu $t7, $t4, $t5     \n\t" //set red
-  "addi $t7, $t7, -1      \n\t"
-  "sll $t7, $t7, 8      \n\t"
-  "andi $t7, $t7, 0xFF00    \n\t"
-  "or $t1, $t1, $t7     \n\t"
-
-  "andi $t7, $t5, 0xFF    \n\t" 
-  "sll $t7, $t5, 16     \n\t" //set blue
-  "or $t1, $t7, $t1     \n\t"
-
-  "j comp_hue_end       \n\t" //jump to end
-
-"comp_hue1:           \n\t" 
-  //if(hue < 512)
-  "li $t7, 512        \n\t"
-  "sub $t7, $t3, $t7      \n\t"
-  "bgez $t7, comp_hue2    \n\t"
-  
-  //hue < 512
-  "addu $t7, $t4, $t5     \n\t" //set green
-  "addi $t7, $t7, -1      \n\t"
-  "andi $t1, $t7, 0xFF    \n\t"
-  
-  "li $t7, 511        \n\t" //set red
-  "subu $t7, $t7, $t3     \n\t"
-  "multu $t4, $t7       \n\t"
-  "mflo $t7         \n\t"
-  "srl $t7, $t7, 8      \n\t"
-  "addu $t7, $t7, $t5     \n\t"
-  "and $t7, $t7, 0xFF     \n\t"
-  "sll $t7, $t7, 8      \n\t"
-  "or $t1, $t7, $t1     \n\t"
-  
-  "sll $t7, $t5, 16     \n\t" //set blue
-  "or $t1, $t7, $t1     \n\t"
-  "j comp_hue_end       \n\t" //jump to end
-  
-"comp_hue2:           \n\t"
-  //if(hue < 768)
-  "li $t7, 768        \n\t"
-  "sub $t7, $t3, $t7      \n\t"
-  "bgez $t7, comp_hue3    \n\t"
-  
-  //hue < 768
-  "addu $t7, $t4, $t5     \n\t" //set green
-  "addi $t7, $t7, -1      \n\t"
-  "andi $t1, $t7, 0xFF    \n\t"
-  
-  "sll $t7, $t5, 8      \n\t" //set red
-  "or $t1, $t7, $t1     \n\t"
-  
-  "li $t7, 512        \n\t" //set blue
-  "subu $t7, $t3, $t7     \n\t"
-  "multu $t4, $t7       \n\t"
-  "mflo $t7         \n\t"
-  "srl $t7, $t7, 8      \n\t"
-  "addu $t7, $t7, $t5     \n\t"
-  "andi $t7, $t7, 0xFF    \n\t"
-  "sll $t7, $t7, 16     \n\t"
-  "or $t1, $t7, $t1     \n\t"
-  
-  "j comp_hue_end       \n\t" //jump to end
-  
-"comp_hue3:           \n\t"
-  //if(hue < 1024)
-  "li $t7, 1024       \n\t"
-  "sub $t7, $t3, $t7      \n\t"
-  "bgez $t7, comp_hue4    \n\t"
-  
-  //hue < 1024
-  "li $t7, 1023       \n\t" //set green
-  "subu $t7, $t7, $t3     \n\t"
-  "multu $t4, $t7       \n\t"
-  "mflo $t7         \n\t"
-  "srl $t7, $t7, 8      \n\t"
-  "addu $t1, $t7, $t5     \n\t"
-  //"and $t7, $t7, 0xFF     \n\t"
-  
-
-  "sll $t7, $t5, 8      \n\t" //set red
-  "or $t1, $t7, $t1     \n\t"
-  
-  "addu $t7, $t4, $t5     \n\t" //set blue
-  "addi $t7, $t7, -1      \n\t"
-  "andi $t7, $t7, 0xFF    \n\t"
-  "sll $t7, $t7, 16     \n\t"
-  "or $t1, $t7, $t1     \n\t"
-  
-  "j comp_hue_end       \n\t" //jump to end
-
-"comp_hue4:           \n\t"
-  //if(hue < 1280)
-  "li $t7, 1280       \n\t"
-  "sub $t7, $t3, $t7      \n\t"
-  "bgez $t7, comp_hue5    \n\t"
-  
-  //hue < 1280
-  "andi $t1, $t5, 0xFF    \n\t" //set green
-
-  "li $t7, 1024       \n\t" //set red
-  "subu $t7, $t3, $t7     \n\t"
-  "multu $t7, $t4       \n\t"
-  "mflo $t7         \n\t"
-  "srl $t7, $t7, 8      \n\t"
-  "addu $t7, $t7, $t5     \n\t"
-  "sll $t7, $t7, 8      \n\t"
-  "or $t1, $t1, $t7     \n\t"
-  
-  "addu $t7, $t4, $t5     \n\t" //set blue
-  "addi $t7, $t7, -1      \n\t"
-  "sll $t7, $t7, 16     \n\t"
-  "or $t1, $t7, $t1     \n\t"
-  
-  "j comp_hue_end       \n\t" //jump to end
-
-"comp_hue5:           \n\t" 
-  //if(hue < 1536)
-  "li $t7, 1536       \n\t"
-  "sub $t7, $t3, $t7      \n\t"
-  "bgez $t7, comp_hue6    \n\t"
-  
-  //hue < 1536
-  "andi $t1, $t5, 0xFF    \n\t" //set green
-
-  "addu $t7, $t4, $t5     \n\t" //set red
-  "addi $t7, $t7, -1      \n\t"
-  "sll $t7, $t7, 8      \n\t"
-  "or $t1, $t1, $t7     \n\t"
-  
-  "li $t7, 1535       \n\t" //set blue
-  "subu $t7, $t7, $t3     \n\t"
-  "multu $t7, $t4       \n\t"
-  "mflo $t7         \n\t"
-  "andi $t7, $t7, 0xFF00    \n\t"
-  "sll $t7, $t7, 8      \n\t"
-  "or $t1, $t1, $t7     \n\t"
-"comp_hue6:           \n\t" 
-
-"comp_hue_end:          \n\t"
-  
-"srl $t7, $t2, 24     \n\t" //get value
-"andi $t7, $t7, 0xFF    \n\t"
-
-"bne $t7, $zero, zero_val_check \n\t"
-"move $t1, $zero      \n\t"
-
-"zero_val_check:      \n\t"
-    
-"j colorComputed    \n\t"
-  
-//end of assembly
-  "HSVassemblyEnd:    \n\t"
-  
-  : //output
-  : "r"(pinMask), "r"(numberOfLEDs), "m"(portClr), "m"(portSet), "m"(colorArray) //input
-  : "%s0" //clobber-list
-);
+  asm volatile(
+    "   lw $s0, %4                      \n"     // load address of color_ptr
+    // compute first color
+    "   j computeFirstColor             \n"
+    "colorComputed:                     \n"
+    // loop through all LEDs
+    "forLoop:                           \n"
+    "   move $t0, $t1                   \n"     // move the next_color to current_color
+    "   move $t1, $zero                 \n"     // clear next_color
+    "   addi $s0, $s0, 4                \n"
+    "   lw $t2, ($s0)                   \n"
+    "   move $t6, $zero                 \n"     // clear t6 for a byte iterator
+    "color_loop:                        \n"
+    ////////////////////
+    // Bit 0
+    ////////////////////
+    "   lw $t7, %3                      \n"     // set pin
+    "   sw %0, ($t7)                    \n"
+    "   andi $t3, $t2, 0xFFFF           \n"     // get hue
+    "   srl $t4, $t2, 16                \n"     // get saturation
+    "   andi $t4, $t4, 0xFF             \n"
+    "   addi $t4, $t4, 1                \n"
+    "   srl $t5, $t2, 24                \n"     // get value
+    "   andi $t5, $t5, 0xFF             \n"
+    "   addi $t5, $t5, 1                \n"
+    "   multu $t5, $t4                  \n"     // chroma = sat * val
+    "   mflo $t4                        \n"
+    "   srl $t4, $t4, 8                 \n"
+    "   subu $t5, $t5, $t4              \n"     // m_num = value - chroma
+    // delay for the end of the first section
+    HSV_bit_0_delay_0                           // preprocessor macro
+    "   andi $t7, $t0, 0b10000000       \n"     // bitmask out the value 
+    "   bne $t7, $zero, bit0IsHigh      \n"     // branch if bit is high, branch over set low
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    "bit0IsHigh:                        \n"
+    // delay for the end of the second section
+    HSV_bit_0_delay_1                           // preprocessor macro
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    // if(hue < 256)
+    "   li $t7, 256                     \n"     // load hue
+    "   sub $t7, $t3, $t7               \n"     // store hue - 256
+    "   bgez $t7, didNotMakeHue0        \n"     // if hue>256 branch
+    // hue < 256
+    "   multu $t3, $t4                  \n"     // set green
+    "   mflo $t1                        \n"
+    "   srl $t1, $t1, 8                 \n"
+    "   add $t1, $t1, $t5               \n"
+    "   addu $t7, $t4, $t5              \n"     // set red
+    "   addi $t7, $t7, -1               \n"
+    "   sll $t7, $t7, 8                 \n"
+    "   andi $t7, $t7, 0xFF00           \n"
+    "   or $t1, $t1, $t7                \n"
+    "   andi $t7, $t5, 0xFF             \n"
+    "   sll $t7, $t5, 16                \n"     // set blue
+    "   or $t1, $t7, $t1                \n"
+    // delay for the end of the third section when the hue has been made
+    HSV_bit_0_delay_2                           // preprocessor macro
+    "   j madeHue0                      \n"
+    "didNotMakeHue0:                    \n"
+    // delay for the end of the third section when the hue has not been made
+    HSV_bit_0_delay_3                           // preprocessor macro
+    "madeHue0:                          \n"
+    ////////////////////
+    // Bit 1
+    ////////////////////
+    "   lw $t7, %3                      \n"     // set pin
+    "   sw %0, ($t7)                    \n"
+    // delay for the end of the first section
+    HSV_universal_delay_1                       // preprocessor macro
+    "   andi $t7, $t0, 0b01000000       \n"     // bitmask out the value 
+    "   bne $t7, $zero, bit1IsHigh      \n"     // branch if bit is high, branch over set low
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    "bit1IsHigh:                        \n"
+    // delay for the end of the second section 
+    HSV_universal_delay_2                       // preprocessor macro
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    // if(next_color == 0) then continue
+    "   bne $t1, $zero, huePrevMade1    \n"
+    // if(hue < 512)
+    "   li $t7, 512                     \n"
+    "   sub $t7, $t3, $t7               \n"
+    "   bgez $t7, didNotMakeHue1        \n"
+    // hue < 512
+    "   addu $t7, $t4, $t5              \n"     // set green
+    "   addi $t7, $t7, -1               \n"
+    "   andi $t1, $t7, 0xFF             \n"
+    "   li $t7, 511                     \n"     // set red
+    "   subu $t7, $t7, $t3              \n"
+    "   multu $t4, $t7                  \n"
+    "   mflo $t7                        \n"
+    "   srl $t7, $t7, 8                 \n"
+    "   addu $t7, $t7, $t5              \n"
+    "   and $t7, $t7, 0xFF              \n"
+    "   sll $t7, $t7, 8                 \n"
+    "   or $t1, $t7, $t1                \n"
+    "   sll $t7, $t5, 16                \n"     // set blue
+    "   or $t1, $t7, $t1                \n"
+    // delay for the end of the third section when hue is made
+    HSV_bit_1_delay_0
+    "   j madeHue1                      \n"
+   "huePrevMade1:                       \n"
+    // delay for the end of the third section hue was made earlier
+    HSV_bit_1_delay_1
+    "   j madeHue1                      \n"
+    "didNotMakeHue1:                    \n"
+    // delay for the end of the third section hue has not been made  
+    HSV_bit_1_delay_2
+    "madeHue1:                          \n"
+    ////////////////////
+    // Bit 2
+    ////////////////////
+    "   lw $t7, %3                      \n"     // set pin
+    "   sw %0, ($t7)                    \n"
+    // delay for the end of the first section
+    HSV_universal_delay_1                       // preprocessor macro
+    "   andi $t7, $t0, 0b00100000       \n"     // bitmask out the value
+    "   bne $t7, $zero, bit2IsHigh      \n"     // branch if bit is high, branch over set low
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    "bit2IsHigh:                        \n"
+    // delay for the end of the second section
+    HSV_universal_delay_2                       // preprocessor macro
+    "   nop                             \n"
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    // if(next_color == 0) then continue
+    "   bne $t1, $zero, huePrevMade2    \n"
+    // if(hue < 768)
+    "   li $t7, 768                     \n"
+    "   sub $t7, $t3, $t7               \n"
+    "   bgez $t7, didNotMakeHue2        \n"
+    // hue < 768
+    "   addu $t7, $t4, $t5              \n"     // set green
+    "   addi $t7, $t7, -1               \n"
+    "   andi $t1, $t7, 0xFF             \n"
+    "   sll $t7, $t5, 8                 \n"     // set red
+    "   or $t1, $t7, $t1                \n"
+    "   li $t7, 512                     \n"     // set blue
+    "   subu $t7, $t3, $t7              \n"
+    "   multu $t4, $t7                  \n"
+    "   mflo $t7                        \n"
+    "   srl $t7, $t7, 8                 \n"
+    "   addu $t7, $t7, $t5              \n"
+    "   andi $t7, $t7, 0xFF             \n"
+    "   sll $t7, $t7, 16                \n"
+    "   or $t1, $t7, $t1                \n"
+    // delay for the end of the third section when hue is made
+    HSV_bit_2_delay_0                           // preprocessor macro
+    "   j madeHue2                      \n"
+    "huePrevMade2:                      \n"
+    // delay for the end of the third section hue was made earlier 
+    HSV_bit_2_delay_1                           // preprocessor macro
+    "   j madeHue2                      \n"
+    "didNotMakeHue2:                    \n"
+    // delay for the end of the third section when hue is not made 
+    HSV_bit_2_delay_2                           // preprocessor macro
+    "madeHue2:                          \n"
+    ////////////////////
+    // Bit 3
+    ////////////////////
+    "   lw $t7, %3                      \n"     // set pin
+    "   sw %0, ($t7)                    \n"
+    // delay for the end of the first section
+    HSV_universal_delay_1                       // preprocessor macro
+    "   andi $t7, $t0, 0b00010000       \n"
+    "   bne $t7, $zero, bit3IsHigh      \n"     // branch if bit is high, branch over set low
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    "bit3IsHigh:                        \n"
+    // delay for the end of the second section 
+    HSV_universal_delay_2                       // preprocessor macro
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    // if(next_color == 0) then continue
+    "   bne $t1, $zero, huePrevMade3    \n"
+    // if(hue < 1024)
+    "   li $t7, 1024                    \n"
+    "   sub $t7, $t3, $t7               \n"
+    "   bgez $t7, didNotMakeHue3        \n"
+    // hue < 1024
+    "   li $t7, 1023                    \n"     // set green
+    "   subu $t7, $t7, $t3              \n"
+    "   multu $t4, $t7                  \n"
+    "   mflo $t7                        \n"
+    "   srl $t7, $t7, 8                 \n"
+    "   addu $t1, $t7, $t5              \n"
+    // "and $t7, $t7, 0xFF               \n"
+    "   sll $t7, $t5, 8                 \n"     // set red
+    "   or $t1, $t7, $t1                \n"
+    "   addu $t7, $t4, $t5              \n"     // set blue
+    "   addi $t7, $t7, -1               \n"
+    "   andi $t7, $t7, 0xFF             \n"
+    "   sll $t7, $t7, 16                \n"
+    "   or $t1, $t7, $t1                \n"
+    // delay for the end of the third section when hue is made
+    HSV_bit_3_delay_0
+    "   j madeHue3                      \n"
+    "huePrevMade3:                      \n"
+    // delay for the end of the third section hue was made earlier
+    HSV_bit_3_delay_1
+    "   j madeHue3                      \n"
+    "didNotMakeHue3:                    \n"
+    // delay for the end of the third section when hue is not made
+    HSV_bit_3_delay_2
+    "madeHue3:                          \n"
+    ////////////////////
+    // Bit 4
+    ////////////////////
+    "   lw $t7, %3                      \n"     // set pin
+    "   sw %0, ($t7)                    \n"
+    // delay for the end of the first section
+    HSV_universal_delay_1                       // preprocessor macro
+    "   andi $t7, $t0, 0b00001000       \n"
+    "   bne $t7, $zero, bit4IsHigh      \n"     // branch if bit is high, branch over set low
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    "bit4IsHigh:                        \n"
+    // delay for the end of the second section
+    HSV_universal_delay_2                       // preprocessor macro
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    // if next_color is not zero then branch
+    "   bne $t1, $zero, huePrevMade4    \n"
+    // if(hue < 1280)
+    "   li $t7, 1280                    \n"
+    "   sub $t7, $t3, $t7               \n"
+    "   bgez $t7, didNotMakeHue4        \n"
+    // hue < 1280
+    "   andi $t1, $t5, 0xFF             \n"     // set green
+    "   li $t7, 1024                    \n"     // set red
+    "   subu $t7, $t3, $t7              \n"
+    "   multu $t7, $t4                  \n"
+    "   mflo $t7                        \n"
+    "   srl $t7, $t7, 8                 \n"
+    "   addu $t7, $t7, $t5              \n"
+    "   sll $t7, $t7, 8                 \n"
+    "   or $t1, $t1, $t7                \n"
+    "   addu $t7, $t4, $t5              \n"     // set blue
+    "   addi $t7, $t7, -1               \n"
+    "   sll $t7, $t7, 16                \n"
+    "   or $t1, $t7, $t1                \n"
+    // delay for the end of the third section when hue is made
+    HSV_bit_4_delay_0                           // preprocessor macro
+    "   j madeHue4                      \n"
+    "huePrevMade4:                      \n"
+    // delay for the end of the third section hue was made earlier
+    HSV_bit_4_delay_1                           // preprocessor macro
+    "   j madeHue4                      \n"
+    "didNotMakeHue4:                    \n"
+    // delay for the end of the third section when hue is not made
+    HSV_bit_4_delay_2
+    "madeHue4:                          \n"
+    ////////////////////
+    // Bit 5
+    ////////////////////
+    "   lw $t7, %3                      \n"     // set pin
+    "   sw %0, ($t7)                    \n"
+    // delay for the end of the first section
+    HSV_universal_delay_1                       // preprocessor macro
+    "   andi $t7, $t0, 0b0000100        \n"
+    "   bne $t7, $zero, bit5IsHigh      \n"     // branch if bit is high, branch over set low
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    "   bit5IsHigh:                     \n"
+    // delay for the end of the second section
+    HSV_universal_delay_2                       // preprocessor macro
+    "   nop                             \n"
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    // if next_color is not zero then branch
+    "   bne $t1, $zero, huePrevMade5    \n"
+    // if(hue < 1536)
+    "   li $t7, 1536                    \n"
+    "   sub $t7, $t3, $t7               \n"
+    "   bgez $t7, didNotMakeHue5        \n"
+    // hue < 1536
+    "   andi $t1, $t5, 0xFF             \n"     // set green
+    "   addu $t7, $t4, $t5              \n"     // set red
+    "   addi $t7, $t7, -1               \n"
+    "   sll $t7, $t7, 8                 \n"
+    "   or $t1, $t1, $t7                \n"
+    "   li $t7, 1535                    \n"     // set blue
+    "   subu $t7, $t7, $t3              \n"
+    "   multu $t7, $t4                  \n"
+    "   mflo $t7                        \n"
+    "   andi $t7, $t7, 0xFF00           \n"
+    "   sll $t7, $t7, 8                 \n"
+    "   or $t1, $t1, $t7                \n"
+    // delay for the end of the third section when hue is made
+    HSV_bit_5_delay_0                           // preprocessor macro
+    "   j madeHue5                      \n"
+    "huePrevMade5:                      \n"
+    // delay for the end of the third section hue was made earlier
+    HSV_bit_5_delay_1                           // preprocessor macro
+    "   j madeHue5                      \n"
+    "didNotMakeHue5:                    \n"
+    // delay for the end of the third section when hue is not made
+    HSV_bit_5_delay_2                           // preprocessor macro
+    "madeHue5:                          \n"
+    ////////////////////
+    // Bit 6
+    ////////////////////
+    "   lw $t7, %3                      \n"     // set pin
+    "   sw %0, ($t7)                    \n"
+    // delay for the end of the first section
+    HSV_universal_delay_1                       // preprocessor macro
+    "   andi $t7, $t0, 0b00000010       \n"
+    "   bne $t7, $zero, bit6IsHigh      \n"     // branch if bit is high, branch over set low
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    "   bit6IsHigh:                     \n"
+    // delay for the end of the second section
+    HSV_universal_delay_2                       // preprocessor macro
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    "   srl $t7, $t2, 24                \n"     // get value
+    "   andi $t7, $t7, 0xFF             \n"
+    "   bne $t7, $zero, zero_val_check_1 \n"
+    "   move $t1, $zero                 \n"
+    "zero_val_check_1:                  \n"
+    // delay for the end of the second section
+    HSV_universal_delay_3                       // preprocessor macro
+    ////////////////////
+    // Bit 7
+    ////////////////////
+    "   lw $t7, %3                      \n"     // set pin
+    "   sw %0, ($t7)                    \n"
+    // delay for the end of the first section
+    HSV_universal_delay_1                       // preprocessor macro
+    "   andi $t7, $t0, 0b00000001       \n"
+    "   bne $t7, $zero, bit7IsHigh      \n"     // branch if bit is high, branch over set low
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    "bit7IsHigh:                        \n"
+    // delay for the end of the second section
+    HSV_universal_delay_2                       // preprocessor macro
+    "   lw $t7, %2                      \n"     // clear pin
+    "   sw %0, ($t7)                    \n"
+    // delay for the end of the second section
+    HSV_universal_delay_3                       // preprocessor macro
+    // shift the data to the next color byte
+    "   srl $t0, $t0, 8                 \n"
+    "   addi $t6, $t6, 1                \n"     // iterate t6
+    "   li $t7, 3                       \n"     // load
+    "   bne $t7, $t6, color_loop        \n"
+    ///////////////////////////////
+    // end of data stream  
+    "   addi %1, %1, -1                 \n"     // decrement the led 
+    "   bgt %1, $zero, forLoop          \n"
+    // end of forLoop:
+    "   j HSVassemblyEnd                \n"
+    "computeFirstColor:                 \n"
+    // color computation
+    "   lw $t2, ($s0)                   \n"     // dereference color_ptr address
+    "   move $t1, $zero                 \n"     // clear next color
+    "   andi $t3, $t2, 0xFFFF           \n"     // get hue
+    "   srl $t4, $t2, 16                \n"     // get saturation
+    "   andi $t4, $t4, 0xFF             \n"
+    "   addi $t4, $t4, 1                \n"
+    "   srl $t5, $t2, 24                \n"     // get value
+    "   andi $t5, $t5, 0xFF             \n"
+    "   addi $t5, $t5, 1                \n"
+    "   multu $t5, $t4                  \n"     // chroma = sat * val
+    "   mflo $t4                        \n"
+    "   srl $t4, $t4, 8                 \n"
+    "   subu $t5, $t5, $t4              \n"     // m_num = value - chroma
+    // if(hue < 256)
+    "   li $t7, 256                     \n"     // load hue
+    "   sub $t7, $t3, $t7               \n"     // store hue - 256
+    "   bgez $t7, comp_hue1             \n"     // if hue>256 branch
+    // hue < 256
+    "   multu $t3, $t4                  \n"     // set green
+    "   mflo $t7                        \n"
+    "   srl $t7, $t7, 8                 \n"
+    "   add $t1, $t7, $t5               \n"
+    "   addu $t7, $t4, $t5              \n"     // set red
+    "   addi $t7, $t7, -1               \n"
+    "   sll $t7, $t7, 8                 \n"
+    "   andi $t7, $t7, 0xFF00           \n"
+    "   or $t1, $t1, $t7                \n"
+    "   andi $t7, $t5, 0xFF             \n"
+    "   sll $t7, $t5, 16                \n"     // set blue
+    "   or $t1, $t7, $t1                \n"
+    "   j comp_hue_end                  \n"     // jump to end
+    "comp_hue1:                         \n"
+    // if(hue < 512)
+    "   li $t7, 512                     \n"
+    "   sub $t7, $t3, $t7               \n"
+    "   bgez $t7, comp_hue2             \n"
+    // hue < 512
+    "   addu $t7, $t4, $t5              \n"     // set green
+    "   addi $t7, $t7, -1               \n"
+    "   andi $t1, $t7, 0xFF             \n"
+    "   li $t7, 511                     \n"     // set red
+    "   subu $t7, $t7, $t3              \n"
+    "   multu $t4, $t7                  \n"
+    "   mflo $t7                        \n"
+    "   srl $t7, $t7, 8                 \n"
+    "   addu $t7, $t7, $t5              \n"
+    "   and $t7, $t7, 0xFF              \n"
+    "   sll $t7, $t7, 8                 \n"
+    "   or $t1, $t7, $t1                \n"
+    "   sll $t7, $t5, 16                \n"     // set blue
+    "   or $t1, $t7, $t1                \n"
+    "   j comp_hue_end                  \n"     // jump to end
+    "comp_hue2:                         \n"
+    // if(hue < 768)
+    "   li $t7, 768                     \n"
+    "   sub $t7, $t3, $t7               \n"
+    "   bgez $t7, comp_hue3             \n"
+    // hue < 768
+    "   addu $t7, $t4, $t5              \n"     // set green
+    "   addi $t7, $t7, -1               \n"
+    "   andi $t1, $t7, 0xFF             \n"
+    "   sll $t7, $t5, 8                 \n"     // set red
+    "   or $t1, $t7, $t1                \n"
+    "   li $t7, 512                     \n"     // set blue
+    "   subu $t7, $t3, $t7              \n"
+    "   multu $t4, $t7                  \n"
+    "   mflo $t7                        \n"
+    "   srl $t7, $t7, 8                 \n"
+    "   addu $t7, $t7, $t5              \n"
+    "   andi $t7, $t7, 0xFF             \n"
+    "   sll $t7, $t7, 16                \n"
+    "   or $t1, $t7, $t1                \n"
+    "   j comp_hue_end                  \n"     // jump to end
+    "comp_hue3:                         \n"
+    // if(hue < 1024)
+    "   li $t7, 1024                    \n"
+    "   sub $t7, $t3, $t7               \n"
+    "   bgez $t7, comp_hue4             \n"
+    // hue < 1024
+    "   li $t7, 1023                    \n"     // set green
+    "   subu $t7, $t7, $t3              \n"
+    "   multu $t4, $t7                  \n"
+    "   mflo $t7                        \n"
+    "   srl $t7, $t7, 8                 \n"
+    "   addu $t1, $t7, $t5              \n"
+    // "and $t7, $t7, 0xFF              \n"
+    "   sll $t7, $t5, 8                 \n"     // set red
+    "   or $t1, $t7, $t1                \n"
+    "   addu $t7, $t4, $t5              \n"     // set blue
+    "   addi $t7, $t7, -1               \n"
+    "   andi $t7, $t7, 0xFF             \n"
+    "   sll $t7, $t7, 16                \n"
+    "   or $t1, $t7, $t1                \n"
+    "   j comp_hue_end                  \n"     // jump to end
+    "comp_hue4:                         \n"
+    // if(hue < 1280)
+    "   li $t7, 1280                    \n"
+    "   sub $t7, $t3, $t7               \n"
+    "   bgez $t7, comp_hue5             \n"
+    // hue < 1280
+    "   andi $t1, $t5, 0xFF             \n"     // set green
+    "   li $t7, 1024                    \n"     // set red
+    "   subu $t7, $t3, $t7              \n"
+    "   multu $t7, $t4                  \n"
+    "   mflo $t7                        \n"
+    "   srl $t7, $t7, 8                 \n"
+    "   addu $t7, $t7, $t5              \n"
+    "   sll $t7, $t7, 8                 \n"
+    "   or $t1, $t1, $t7                \n"
+    "   addu $t7, $t4, $t5              \n"     // set blue
+    "   addi $t7, $t7, -1               \n"
+    "   sll $t7, $t7, 16                \n"
+    "   or $t1, $t7, $t1                \n"
+    "   j comp_hue_end                  \n"     // jump to end
+    "comp_hue5:                         \n"
+    // if(hue < 1536)
+    "   li $t7, 1536                    \n"
+    "   sub $t7, $t3, $t7               \n"
+    "   bgez $t7, comp_hue6             \n"
+    // hue < 1536
+    "   andi $t1, $t5, 0xFF             \n"     // set green
+    "   addu $t7, $t4, $t5              \n"     // set red
+    "   addi $t7, $t7, -1               \n"
+    "   sll $t7, $t7, 8                 \n"
+    "   or $t1, $t1, $t7                \n"
+    "   li $t7, 1535                    \n"     // set blue
+    "   subu $t7, $t7, $t3              \n"
+    "   multu $t7, $t4                  \n"
+    "   mflo $t7                        \n"
+    "   andi $t7, $t7, 0xFF00           \n"
+    "   sll $t7, $t7, 8                 \n"
+    "   or $t1, $t1, $t7                \n"
+    "comp_hue6:                         \n"
+    "comp_hue_end:                      \n"
+    "   srl $t7, $t2, 24                \n"     // get value
+    "   andi $t7, $t7, 0xFF             \n"
+    "   bne $t7, $zero, zero_val_check  \n"
+    "   move $t1, $zero                 \n"
+    "   zero_val_check:                 \n"
+    "   j colorComputed                 \n"
+    // end of assembly
+    "HSVassemblyEnd:                    \n"
+    : // output
+    : "r"(pinMask), "r"(numberOfLEDs), "m"(portClr), "m"(portSet), "m"(colorArray) // input
+    : "%s0" // clobber-list
+  );
   
   //bitstream done, enable interrupts
   interrupts();

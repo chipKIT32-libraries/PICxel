@@ -154,61 +154,60 @@ public:
  * See https://wp.josh.com/2014/05/13/ws2812-neopixels-are-not-so-finicky-once-you-get-to-know-them/
  * for a reference on this timing topic.
  * 
+ * The datasheet limts for our timing are as follows:
+ * T0H must be between 200 and 500 ns
+ * T0L must be between 650 and 950 ns
+ * T1H must be between 550 and 850 ns
+ * T1L must be between 450 and 750 ns
+ *
+ * As descrbed in the above link, those  limits are more restrive than actually necessary,
+ * but they are a good place to aim for.
+ *
  * Since the two types of LEDs (WS2812/WS2812S and WS2812B) have slightly different
  * timing requirements, we try to split the difference here. Our goals are:
- * T0H =  220 ns (on the short side so we can debug)
- * T0L = 1000 ns
- * T1H =  800 ns
- * T1L =  350 ns
+ * T0H =  220 ns (on the short side so we can debug - debugger adds some extra time every now and then)
+ * T0L = 1000 ns (450 minimum, 5000 max)
+ * T1H =  800 ns (550 minimum)
+ * T1L =  500 ns (450 minimum, 5000 max)
  * 
  * All of these require the optimization level to be at -O2 (default for Arduino IDE)
  *
  * A nice optimization would be to determine the minimum F_CPU frequency where the
  * core timer method could be used, and use it for any frequency above that, and use
  * the hard coded nops for all frequencies below.
+ *
+ * The number of nops in the defines below are tuned to create the necessary delays in the
+ * LED bitstream. However, they take into account the other code that is running before and
+ * after.
  */
+#define GRB_DELAY(XX) {asm volatile("li $a0,"#XX" \n GRB_delay_%=: \n addi $a0,$a0,-1 \n bnez $a0, GRB_delay_%= \n nop \n " : : : "a0");}
+
 #if F_CPU == 40000000L
-    //  220 ns
-    #define GRB_delay_T0H(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n ");}
-    // 1000 ns
-    #define GRB_delay_T0L(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n ");}
-    //  800 ns
-    #define GRB_delay_T1H(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n");}
-    //  350 ns
-    #define GRB_delay_T1L(); {asm volatile("nop\n nop\n nop\n nop\n");}
+  #define GRB_DELAY_T0H   GRB_DELAY(2)    // Goal 220ns,  actual 274ns
+  #define GRB_DELAY_T0L   GRB_DELAY(10)   // Goal 1000ns, actual 1052ns
+  #define GRB_DELAY_T1H   GRB_DELAY(9)    // Goal 800ns,  actual 800ns
+  #define GRB_DELAY_T1L   GRB_DELAY(4)    // Goal 500ns,  actual 600ns
 #elif F_CPU == 48000000L
-    //  220 ns
-    #define GRB_delay_T0H(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n ");}
-    //  980 ns
-    #define GRB_delay_T0L(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n ");}
-    //  810 ns
-    #define GRB_delay_T1H(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n");}
-    //  360 ns
-    #define GRB_delay_T1L(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n");}
+  #define GRB_DELAY_T0H   GRB_DELAY(2)    // Goal 220ns,  actual 226ns
+  #define GRB_DELAY_T0L   GRB_DELAY(12)   // Goal 1000ns, actual 1002ns
+  #define GRB_DELAY_T1H   GRB_DELAY(11)   // Goal 800ns,  actual 790ns
+  #define GRB_DELAY_T1L   GRB_DELAY(5)    // Goal 500ns,  actual 654ns
 #elif F_CPU == 80000000L
-    //  220 ns
-    #define GRB_delay_T0H(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n ");}
-    // 1000 ns
-    #define GRB_delay_T0L(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n ");}
-    //  800 ns
-    #define GRB_delay_T1H(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n ");}
-    //  350 ns
-    #define GRB_delay_T1L(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n ");}
+  #define GRB_DELAY_T0H   GRB_DELAY(5)    // Goal 220ns,  actual 248ns
+  #define GRB_DELAY_T0L   GRB_DELAY(21)   // Goal 1000ns, actual 940ns
+  #define GRB_DELAY_T1H   GRB_DELAY(20)   // Goal 800ns,  actual 810ns
+  #define GRB_DELAY_T1L   GRB_DELAY(10)   // Goal 500ns,  actual 526ns
 #elif F_CPU == 200000000L
-    //  220 ns
-    #define GRB_delay_T0H(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n ");}
-    // 1000 ns
-    #define GRB_delay_T0L(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n ");}
-    //  800 ns
-    #define GRB_delay_T1H(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n ");}
-    //  350 ns
-    #define GRB_delay_T1L(); {asm volatile("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n ");}
+  #define GRB_DELAY_T0H   GRB_DELAY(14)   // Goal 220ns,  actual 238ns
+  #define GRB_DELAY_T0L   GRB_DELAY(63)   // Goal 1000ns, actual 1002ns
+  #define GRB_DELAY_T1H   GRB_DELAY(52)   // Goal 800ns,  actual 808ns
+  #define GRB_DELAY_T1L   GRB_DELAY(30)   // Goal 500ns,  actual 512ns
 #else
-    #warning F_CPU is not defined to a known value. PICxcel library not able to create delays properly.
-    #define GRB_delay_T0H();
-    #define GRB_delay_T0L();
-    #define GRB_delay_T1H();
-    #define GRB_delay_T1L();
+  #warning F_CPU is not defined to a known value. PICxcel library not able to create delays properly.
+  #define GRB_DELAY_T0H
+  #define GRB_DELAY_T0L
+  #define GRB_DELAY_T1H
+  #define GRB_DELAY_T1L
 #endif
 
 /* Note, these need to be measured and converted so F_CPU selects the right set, 
